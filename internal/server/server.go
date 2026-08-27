@@ -97,10 +97,6 @@ func logEndpoints(logger *slog.Logger, router chi.Router) {
 		handler http.Handler,
 		middlewares ...func(http.Handler) http.Handler,
 	) error {
-		if route == "/lhealth" || route == "/rhealth" || route == "/docs/*" {
-			return nil
-		}
-
 		logger.Info(
 			"route registered",
 			slog.String("method", method),

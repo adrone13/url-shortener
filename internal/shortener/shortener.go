@@ -3,26 +3,32 @@ package shortener
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand/v2"
 	"net/url"
 	"strings"
 )
 
-type URL struct {
-	Original string
-	Short    string
+var (
+	ErrInvalidURL = errors.New("invalid url")
+	ErrNotFound   = errors.New("short url not found")
+)
+
+type Link struct {
+	OriginalURL string
+	Code        string
 }
 
-type URLStorage interface {
-	Save(ctx context.Context, url URL) error
-	Get(ctx context.Context, shortURL string) (string, error)
+type Repository interface {
+	Save(ctx context.Context, link Link) error
+	Get(ctx context.Context, code string) (string, error)
 }
 
 type Shortener struct {
-	repo URLStorage
+	repo Repository
 }
 
-func New(repo URLStorage) *Shortener {
+func New(repo Repository) *Shortener {
 	return &Shortener{repo: repo}
 }
 
@@ -32,28 +38,28 @@ func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, er
 		return "", err
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return "", errors.New("invalid scheme")
+		return "", fmt.Errorf("%w: missing or unsupported scheme", ErrInvalidURL)
 	}
 	if u.Host == "" {
-		return "", errors.New("invalid host")
+		return "", fmt.Errorf("%w: missing host", ErrInvalidURL)
 	}
 
-	shortURL := generateShortURL()
+	code := generateCode()
 
-	storedURL := URL{
-		Original: originalURL,
-		Short:    shortURL,
+	link := Link{
+		OriginalURL: originalURL,
+		Code:        code,
 	}
 
-	if err := s.repo.Save(ctx, storedURL); err != nil {
+	if err := s.repo.Save(ctx, link); err != nil {
 		return "", err
 	}
 
-	return shortURL, nil
+	return code, nil
 }
 
-func (s *Shortener) Resolve(ctx context.Context, shortURL string) (string, error) {
-	originalURL, err := s.repo.Get(ctx, shortURL)
+func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
+	originalURL, err := s.repo.Get(ctx, code)
 	if err != nil {
 		return "", err
 	}
@@ -63,7 +69,7 @@ func (s *Shortener) Resolve(ctx context.Context, shortURL string) (string, error
 
 const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-func generateShortURL() string {
+func generateCode() string {
 	var sb strings.Builder
 	for range 7 {
 		randInt := rand.IntN(len(alphabet))
