@@ -45,7 +45,7 @@ type Server struct {
 	http   *http.Server
 }
 
-func New(port int, logger *slog.Logger) *Server {
+func New(port int, logger *slog.Logger, routes chi.Router) *Server {
 	router := chi.NewRouter()
 	// ClientIPFromRemoteAddr assumes this server is directly exposed to
 	// clients (no reverse proxy/LB in front of it). If a proxy is
@@ -55,6 +55,10 @@ func New(port int, logger *slog.Logger) *Server {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(requestTimeout))
+
+	router.Mount("/api", routes)
+
+	logEndpoints(logger, router)
 
 	return &Server{
 		logger: logger,
@@ -80,5 +84,32 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	return s.http.Shutdown(ctx)
+}
+
+func logEndpoints(logger *slog.Logger, router chi.Router) {
+	err := chi.Walk(router, func(
+		method string,
+		route string,
+		handler http.Handler,
+		middlewares ...func(http.Handler) http.Handler,
+	) error {
+		if route == "/lhealth" || route == "/rhealth" || route == "/docs/*" {
+			return nil
+		}
+
+		logger.Info(
+			"route registered",
+			slog.String("method", method),
+			slog.String("route", route),
+			slog.Int("middlewares", len(middlewares)),
+		)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 }

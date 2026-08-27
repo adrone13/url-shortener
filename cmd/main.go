@@ -8,8 +8,11 @@ import (
 	"syscall"
 
 	"github.com/adrone13/url-shortener/internal/config"
+	"github.com/adrone13/url-shortener/internal/handler"
 	"github.com/adrone13/url-shortener/internal/logging"
 	"github.com/adrone13/url-shortener/internal/server"
+	"github.com/adrone13/url-shortener/internal/shortener"
+	"github.com/adrone13/url-shortener/internal/storage/memory"
 )
 
 func main() {
@@ -23,7 +26,12 @@ func main() {
 	}
 
 	logger := logging.NewLogger(cfg.LogLevel)
-	srv := server.New(cfg.HttpPort, logger)
+	repo := memory.New()
+	svc := shortener.New(repo)
+	h := handler.NewShortenerHandler(logger, svc)
+	routes := handler.Routes(h)
+
+	srv := server.New(cfg.HttpPort, logger, routes)
 
 	go func() {
 		if err := srv.Start(); err != nil {
