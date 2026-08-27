@@ -39,7 +39,7 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortUrl, err := sh.svc.Shorten(r.Context(), req.URL)
+	shortURL, err := sh.svc.Shorten(r.Context(), req.URL)
 	if err != nil {
 		http.Error(w, "failed to shorten url", http.StatusInternalServerError)
 		sh.logger.Error("failed to shorten url", slog.Any("error", err))
@@ -47,18 +47,18 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(shortenResponse{ShortURL: shortUrl})
+	json.NewEncoder(w).Encode(shortenResponse{ShortURL: shortURL})
 }
 
 func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
-	shortUrl := chi.URLParam(r, "shortUrl")
-	if shortUrl == "" {
+	shortURL := chi.URLParam(r, "shortUrl")
+	if shortURL == "" {
 		http.Error(w, "invalid short url", http.StatusBadRequest)
-		sh.logger.Error("invalid short url", slog.String("short_url", shortUrl))
+		sh.logger.Error("invalid short url", slog.String("short_url", shortURL))
 		return
 	}
 
-	originalUrl, err := sh.svc.Resolve(r.Context(), shortUrl)
+	originalURL, err := sh.svc.Resolve(r.Context(), shortURL)
 	if err != nil {
 		http.Error(w, "failed to resolve url", http.StatusInternalServerError)
 		sh.logger.Error("failed to resolve url", slog.Any("error", err))
@@ -66,5 +66,5 @@ func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resolveResponse{URL: originalUrl})
+	json.NewEncoder(w).Encode(resolveResponse{URL: originalURL})
 }

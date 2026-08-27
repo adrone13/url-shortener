@@ -8,26 +8,26 @@ import (
 	"strings"
 )
 
-type Url struct {
+type URL struct {
 	Original string
 	Short    string
 }
 
-type UrlStorage interface {
-	Save(ctx context.Context, url Url) error
-	Get(ctx context.Context, shortUrl string) (string, error)
+type URLStorage interface {
+	Save(ctx context.Context, url URL) error
+	Get(ctx context.Context, shortURL string) (string, error)
 }
 
 type Shortener struct {
-	repo UrlStorage
+	repo URLStorage
 }
 
-func New(repo UrlStorage) *Shortener {
+func New(repo URLStorage) *Shortener {
 	return &Shortener{repo: repo}
 }
 
-func (s *Shortener) Shorten(ctx context.Context, originalUrl string) (string, error) {
-	u, err := url.Parse(originalUrl)
+func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, error) {
+	u, err := url.Parse(originalURL)
 	if err != nil {
 		return "", err
 	}
@@ -38,32 +38,32 @@ func (s *Shortener) Shorten(ctx context.Context, originalUrl string) (string, er
 		return "", errors.New("invalid host")
 	}
 
-	shortUrl := generateShortUrl()
+	shortURL := generateShortURL()
 
-	storedUrl := Url{
-		Original: originalUrl,
-		Short:    shortUrl,
+	storedURL := URL{
+		Original: originalURL,
+		Short:    shortURL,
 	}
 
-	if err := s.repo.Save(ctx, storedUrl); err != nil {
+	if err := s.repo.Save(ctx, storedURL); err != nil {
 		return "", err
 	}
 
-	return shortUrl, nil
+	return shortURL, nil
 }
 
-func (s *Shortener) Resolve(ctx context.Context, shortUrl string) (string, error) {
-	originalUrl, err := s.repo.Get(ctx, shortUrl)
+func (s *Shortener) Resolve(ctx context.Context, shortURL string) (string, error) {
+	originalURL, err := s.repo.Get(ctx, shortURL)
 	if err != nil {
 		return "", err
 	}
 
-	return originalUrl, nil
+	return originalURL, nil
 }
 
 const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
-func generateShortUrl() string {
+func generateShortURL() string {
 	var sb strings.Builder
 	for range 7 {
 		randInt := rand.IntN(len(alphabet))

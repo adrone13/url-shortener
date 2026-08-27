@@ -17,7 +17,7 @@ func New() *Repo {
 	return &Repo{storage: make(map[string]string)}
 }
 
-func (mr *Repo) Save(_ context.Context, url shortener.Url) error {
+func (mr *Repo) Save(_ context.Context, url shortener.URL) error {
 	mr.mu.Lock() // exclusive access for writing
 	defer mr.mu.Unlock()
 
@@ -30,14 +30,14 @@ func (mr *Repo) Save(_ context.Context, url shortener.Url) error {
 	return nil
 }
 
-func (mr *Repo) Get(_ context.Context, shortUrl string) (string, error) {
+func (mr *Repo) Get(_ context.Context, shortURL string) (string, error) {
 	mr.mu.RLock() // multiple readers allowed
 	defer mr.mu.RUnlock()
 
-	originalUrl, ok := mr.storage[shortUrl]
+	originalURL, ok := mr.storage[shortURL]
 	if !ok {
 		return "", errors.New("short url not found")
 	}
 
-	return originalUrl, nil
+	return originalURL, nil
 }
