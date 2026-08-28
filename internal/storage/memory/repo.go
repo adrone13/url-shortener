@@ -41,3 +41,12 @@ func (mr *Repo) Get(_ context.Context, code string) (string, error) {
 
 	return originalURL, nil
 }
+
+func (mr *Repo) List(_ context.Context) ([]shortener.Link, error) {
+	var links []shortener.Link
+	for code, originalURL := range mr.storage {
+		links = append(links, shortener.Link{OriginalURL: originalURL, Code: code})
+	}
+
+	return links, nil
+}

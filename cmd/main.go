@@ -25,7 +25,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := logging.NewLogger(cfg.LogLevel)
+	logger := logging.NewLogger(cfg.LogLevel, cfg.Env == "local")
 	repo := memory.New()
 	svc := shortener.New(repo)
 	h := handler.NewShortenerHandler(logger, svc)

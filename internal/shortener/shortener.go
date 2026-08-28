@@ -22,6 +22,7 @@ type Link struct {
 type Repository interface {
 	Save(ctx context.Context, link Link) error
 	Get(ctx context.Context, code string) (string, error)
+	List(ctx context.Context) ([]Link, error)
 }
 
 type Shortener struct {
@@ -32,6 +33,8 @@ func New(repo Repository) *Shortener {
 	return &Shortener{repo: repo}
 }
 
+// Shorten
+// TODO: add retry on duplicate
 func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, error) {
 	u, err := url.Parse(originalURL)
 	if err != nil {
@@ -65,6 +68,10 @@ func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
 	}
 
 	return originalURL, nil
+}
+
+func (s *Shortener) List(ctx context.Context) ([]Link, error) {
+	return s.repo.List(ctx)
 }
 
 const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

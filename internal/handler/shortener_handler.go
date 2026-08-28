@@ -19,6 +19,10 @@ type shortenResponse struct {
 	Code string `json:"code"`
 }
 
+type listResponse struct {
+	Links []shortener.Link `json:"links"`
+}
+
 type ShortenerHandler struct {
 	logger *slog.Logger
 	svc    *shortener.Shortener
@@ -30,11 +34,16 @@ func NewShortenerHandler(logger *slog.Logger, svc *shortener.Shortener) *Shorten
 
 func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 	var req shortenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		sh.logger.Error("failed to decode request", slog.Any("error", err))
 		return
 	}
+
+	sh.logger.Info("shorten request received", slog.String("url", req.URL), slog.Any("body", req))
 
 	code, err := sh.svc.Shorten(r.Context(), req.URL)
 	if err != nil {
@@ -54,6 +63,8 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 }
 
 func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
+	sh.logger.Info("resolve request received")
+
 	code := chi.URLParam(r, "code")
 	if code == "" {
 		http.Error(w, "invalid short url", http.StatusBadRequest)
@@ -74,4 +85,18 @@ func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, originalURL, http.StatusFound)
+}
+
+func (sh *ShortenerHandler) list(w http.ResponseWriter, r *http.Request) {
+	sh.logger.Info("list request received")
+
+	links, err := sh.svc.List(r.Context())
+	if err != nil {
+		http.Error(w, "failed to list links", http.StatusInternalServerError)
+		sh.logger.Error("failed to list links", slog.Any("error", err))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(listResponse{Links: links})
 }
