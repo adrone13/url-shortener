@@ -6,9 +6,10 @@ import (
 )
 
 type Config struct {
-	Env      string `env:"ENV,required,notEmpty"`
-	HttpPort int    `env:"HTTP_PORT,required,notEmpty"`
-	LogLevel string `env:"LOG_LEVEL,required,notEmpty"`
+	Env         string `env:"ENV,required,notEmpty"`
+	HttpPort    int    `env:"HTTP_PORT,required,notEmpty"`
+	LogLevel    string `env:"LOG_LEVEL,required,notEmpty"`
+	DatabaseURL string `env:"DATABASE_URL,required,notEmpty"`
 }
 
 func New() (*Config, error) {

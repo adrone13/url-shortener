@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/adrone13/url-shortener/internal/config"
@@ -12,7 +14,7 @@ import (
 	"github.com/adrone13/url-shortener/internal/logging"
 	"github.com/adrone13/url-shortener/internal/server"
 	"github.com/adrone13/url-shortener/internal/shortener"
-	"github.com/adrone13/url-shortener/internal/storage/memory"
+	"github.com/adrone13/url-shortener/internal/storage/postgres"
 )
 
 func main() {
@@ -26,7 +28,17 @@ func main() {
 	}
 
 	logger := logging.NewLogger(cfg.LogLevel, cfg.Env == "local")
-	repo := memory.New()
+
+	logger.Info("starting app", slog.Int("cpus", runtime.NumCPU()))
+
+	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, logger)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	repo := postgres.New(pool)
 	svc := shortener.New(repo)
 	h := handler.NewShortenerHandler(logger, svc)
 	routes := handler.Routes(h)
