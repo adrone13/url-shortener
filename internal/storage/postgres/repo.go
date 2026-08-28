@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/adrone13/url-shortener/internal/shortener"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/adrone13/url-shortener/internal/shortener"
 )
 
 const uniqueViolation = "23505"
@@ -27,8 +28,7 @@ func (r *Repo) Save(ctx context.Context, link shortener.Link) error {
 		link.Code, link.OriginalURL,
 	)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
+		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
 			return fmt.Errorf("%w: code %q already exists", shortener.ErrInvalidURL, link.Code)
 		}
 		return fmt.Errorf("save link: %w", err)
