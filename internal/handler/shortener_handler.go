@@ -43,7 +43,7 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sh.logger.Info("shorten request received", slog.String("url", req.URL), slog.Any("body", req))
+	sh.logger.Debug("shorten request received", slog.String("url", req.URL), slog.Any("body", req))
 
 	code, err := sh.svc.Shorten(r.Context(), req.URL)
 	if err != nil {
@@ -63,7 +63,7 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 }
 
 func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
-	sh.logger.Info("resolve request received")
+	sh.logger.Debug("resolve request received")
 
 	code := chi.URLParam(r, "code")
 	if code == "" {
@@ -88,7 +88,7 @@ func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (sh *ShortenerHandler) list(w http.ResponseWriter, r *http.Request) {
-	sh.logger.Info("list request received")
+	sh.logger.Debug("list request received")
 
 	links, err := sh.svc.List(r.Context())
 	if err != nil {

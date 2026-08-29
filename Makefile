@@ -4,7 +4,7 @@ CMD    := ./cmd
 include .env
 export
 
-.PHONY: build run test lint fmt vet tidy clean db-up db-down migrate-up migrate-down migrate-create
+.PHONY: build run test lint fmt vet tidy clean db-up db-down migrate-up migrate-down migrate-create bench-write bench-read
 
 build:
 	go build -o bin/$(BINARY) $(CMD)
@@ -44,3 +44,26 @@ migrate-down:
 
 migrate-create:
 	migrate create -ext sql -dir migrations -seq $(name)
+
+n := 10000
+c := 50
+
+bench-write:
+	mkdir -p bench-runs
+	hey -n $(n) -c $(c) -m POST \
+		-H "Content-Type: application/json" \
+		-d '{"url":"https://example.com"}' \
+		http://localhost:$(HTTP_PORT)/api/shorten \
+		| tee bench-runs/write-n$(n)-c$(c)-$(shell date +%Y-%m-%d-%H-%M-%S).txt
+
+bench-read:
+	mkdir -p bench-runs
+	hey -n $(n) -c $(c) -disable-redirects \
+		http://localhost:$(HTTP_PORT)/api/$(code) \
+		| tee bench-runs/read-n$(n)-c$(c)-$(shell date +%Y-%m-%d-%H-%M-%S).txt
+
+profile-cpu:
+	go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
+
+profile-allocs:
+	go tool pprof http://localhost:6060/debug/pprof/allocs

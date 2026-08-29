@@ -4,10 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/adrone13/url-shortener/internal/config"
 	"github.com/adrone13/url-shortener/internal/handler"
@@ -16,6 +21,32 @@ import (
 	"github.com/adrone13/url-shortener/internal/shortener"
 	"github.com/adrone13/url-shortener/internal/storage/postgres"
 )
+
+func logPgPoolStatsOnce(pool *pgxpool.Pool, logger *slog.Logger) {
+	poolStats := pool.Stat()
+	logger.Info("PG pool stats",
+		slog.Any("max_cons", poolStats.MaxConns()),
+		slog.Any("idle_cons", poolStats.IdleConns()),
+		slog.Duration("acquire_duration", poolStats.AcquireDuration()),
+		slog.Int64("acquire_count", poolStats.AcquireCount()),
+		slog.Int64("empty_acquire_count", poolStats.EmptyAcquireCount()),
+	)
+}
+
+func logPgPoolStats(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			logPgPoolStatsOnce(pool, logger)
+		case <-ctx.Done():
+			logger.Info("pg pool stats stopped")
+			return
+		}
+	}
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -37,6 +68,16 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	logPgPoolStatsOnce(pool, logger)
+	go logPgPoolStats(ctx, pool, logger)
+
+	go func() {
+		logger.Info("starting pprof server", slog.String("addr", ":6060"))
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			logger.Error("pprof server failed", "error", err)
+		}
+	}()
 
 	repo := postgres.New(pool)
 	svc := shortener.New(repo)
