@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -35,9 +35,7 @@ func NewShortenerHandler(logger *slog.Logger, svc *shortener.Shortener) *Shorten
 func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 	var req shortenRequest
 
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
+	if err := json.UnmarshalRead(r.Body, &req, json.RejectUnknownMembers(true)); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		sh.logger.Error("failed to decode request", slog.Any("error", err))
 		return
@@ -59,7 +57,9 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(shortenResponse{Code: code})
+	if err = json.MarshalWrite(w, shortenResponse{Code: code}); err != nil {
+		sh.logger.Error("failed to encode response", slog.Any("error", err))
+	}
 }
 
 func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
@@ -98,5 +98,7 @@ func (sh *ShortenerHandler) list(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(listResponse{Links: links})
+	if err = json.MarshalWrite(w, listResponse{Links: links}); err != nil {
+		sh.logger.Error("failed to encode response", slog.Any("error", err))
+	}
 }
