@@ -28,7 +28,10 @@ go.work.sum
 .env
 
 # benchmark run output
-bench-runs/
+#bench-runs/
+
+# profiler outpus
+pprof/
 
 # Editor/IDE
 .idea/
