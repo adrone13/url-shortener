@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/url"
 	"strings"
@@ -25,12 +26,19 @@ type Repository interface {
 	List(ctx context.Context) ([]Link, error)
 }
 
-type Shortener struct {
-	repo Repository
+type Cache interface {
+	Get(ctx context.Context, code string) (string, bool, error)
+	Set(ctx context.Context, code string, originalURL string) error
 }
 
-func New(repo Repository) *Shortener {
-	return &Shortener{repo: repo}
+type Shortener struct {
+	repo   Repository
+	cache  Cache
+	logger *slog.Logger
+}
+
+func New(repo Repository, cache Cache, logger *slog.Logger) *Shortener {
+	return &Shortener{repo, cache, logger}
 }
 
 // Shorten
@@ -58,13 +66,29 @@ func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, er
 		return "", err
 	}
 
+	if err = s.cache.Set(ctx, code, originalURL); err != nil {
+		s.logger.Warn("failed to set cache", slog.Any("error", err))
+	}
+
 	return code, nil
 }
 
 func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
-	originalURL, err := s.repo.Get(ctx, code)
+	originalURL, ok, err := s.cache.Get(ctx, code)
+	if err != nil {
+		s.logger.Warn("failed to get cache", slog.Any("error", err))
+	}
+	if ok {
+		return originalURL, nil
+	}
+
+	originalURL, err = s.repo.Get(ctx, code)
 	if err != nil {
 		return "", err
+	}
+
+	if err = s.cache.Set(ctx, code, originalURL); err != nil {
+		s.logger.Warn("failed to set cache", slog.Any("error", err))
 	}
 
 	return originalURL, nil

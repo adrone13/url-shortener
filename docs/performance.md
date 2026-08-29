@@ -119,6 +119,96 @@ Allocation profile (10GB over 30s) breaks down as:
 optimization left to chase — the ceiling is set by network/DB I/O, which is
 where 1-3 already addressed the real cost.
 
+### 5. Read-path concurrency sweep: locating the knee
+
+Reads (`GET /api/{code}`, warm pool at 100) are cheaper than writes as
+expected — no WAL fsync, no `INSERT` — so they scale to a noticeably higher
+rps before saturating:
+
+| c | rps | p50 | p99 | slowest |
+|---|---|---|---|---|
+| 10 | 16,185 | 0.6ms | 1.1ms | 5.2ms |
+| 25 | 20,310 | 1.1ms | 2.3ms | 22.8ms |
+| 100 | 25,643 | 3.3ms | 16.2ms | 61.6ms |
+| 125 | 27,653 | 4.1ms | 15.6ms | 36.4ms |
+| 130 | 29,702 | 4.0ms | 13.5ms | 28.5ms |
+| 140 | 31,613 | 3.9ms | 18.0ms | 21.8ms |
+| 150 | 28,413 | 4.7ms | 28.6ms | 34.1ms |
+| 160 | 31,456 | 4.5ms | 18.9ms | 23.4ms |
+| 175 | 28,888 | 5.3ms | 26.9ms | 37.9ms |
+| 200 | 27,643 | 6.3ms | 40.4ms | 55.6ms |
+| 225 | 30,868 | 6.1ms | 32.0ms | 62.5ms |
+| 250 | 31,124 | 6.6ms | 37.4ms | 64.0ms |
+| 275 | 28,729 | 8.5ms | 39.4ms | 50.1ms |
+
+The `c=200` re-run confirms the original 32,007 rps reading was noise: rerun
+at the same concurrency landed at 27,643 rps with a visibly worse tail (p99
+40.4ms vs. the original 23.7ms) — a genuine capacity increase doesn't
+disappear on a repeat. With the gaps filled in (130/140/160), the whole
+`c=125`-`275` range turns out to be a noisy plateau rather than a smooth
+curve with one clean elbow: rps oscillates between ~27.6k-31.6k throughout,
+with no further systematic growth past `c≈130-140` — that's roughly where
+peak throughput is first reached (140: 31,613 rps), not 225.
+
+Latency tells a clearer story than throughput does here. p50 sits in a tight
+3.9-4.7ms band across `c=125-160`, then trends upward from `c=175` onward
+(5.3ms → 6.3ms → 6.1ms → 6.6ms → 8.5ms) even though rps isn't climbing to
+match. **That's the real signal: latency climbing while throughput stops
+climbing (or drops) is the definition of past-the-knee.** Combining both
+signals: the throughput ceiling is reached by `c≈130-140`, and it becomes
+unambiguous you're past it (rising latency, flat-to-falling throughput) by
+`c≈175-200`; `225-275` is squarely past it, with `275` the clearest case
+(rps drops to 28,729 — below the `c=175` value — while p50 hits its worst
+point, 8.5ms).
+
+`hey`'s runs are noisy enough at fixed `c` (see the `c=200` before/after
+above) that any single reading near a boundary should be treated as
+approximate — 2-3 repeats per concurrency level would narrow this further
+better than adding yet more distinct `c` values would.
+
+### 6. In-process LRU cache roughly doubled read throughput
+
+Added a cache-aside layer (`internal/cache/lru`, wrapping
+`hashicorp/golang-lru`) in front of `Repository.Get` — `Shortener.Resolve`
+checks the cache first and falls back to Postgres on a miss, populating the
+cache on both a miss and on `Shorten`'s initial write. Re-ran the read sweep
+at `c=140-200` (same concurrency points as finding 5) with the cache in
+place:
+
+| c | rps (no cache) | rps (LRU) | p50 (no cache) | p50 (LRU) | p99 (no cache) | p99 (LRU) |
+|---|---|---|---|---|---|---|
+| 140 | 31,613 | 60,193 | 3.9ms | 1.7ms | 18.0ms | 13.9ms |
+| 150 | 28,413 | 63,383 | 4.7ms | 1.8ms | 28.6ms | 12.6ms |
+| 160 | 31,456 | 63,243 | 4.5ms | 1.9ms | 18.9ms | 14.8ms |
+| 175 | 28,888 | 62,561 | 5.3ms | 2.1ms | 26.9ms | 15.0ms |
+| 200 | 27,643 | 63,370 | 6.3ms | 2.3ms | 40.4ms | 15.8ms |
+
+Roughly 2-2.3x throughput and about half the p50 — expected, since a cache
+hit replaces a Postgres round-trip with an in-process map lookup. More
+telling than the averages: without the cache, rps was still a noisy plateau
+across this range (finding 5); with it, rps is flat at ~60-63k regardless of
+`c` — the bottleneck has moved off the app/DB entirely (likely the `hey`
+client or local network stack), well past where the uncached knee was found.
+
+Caveats on this specific test: `bench-read` always hits one fixed `code`, so
+this is a 100%-hit-rate best case on a single hot key, and `lru.New(10)`
+(capacity 10) means eviction was never exercised — this proves the mechanism
+works, not how it holds up against a realistic spread of keys or actual
+evictions. Also, four of the five runs completed slightly short of 10,000
+responses (9,900-9,975, no reported errors) — consistent with the very fast
+(~0.16s) runs being interrupted a moment early rather than a real failure;
+only `c=200` completed cleanly, and it shows the same ~2x effect, so the
+conclusion doesn't rest on the short runs alone.
+
+**Production note**: a single in-process LRU only works cleanly for a
+single instance. Once there's more than one app instance (the normal case in
+production), each instance would keep an independent, colder cache with no
+shared view — for a real multi-instance deployment, use either Redis alone,
+or Redis as the shared cache with a small in-process LRU in front of it as a
+local L1 (justified once Redis's own round-trip is shown to matter, not by
+default). See the discussion this finding came out of for the reasoning
+behind that split.
+
 ## Reading a pprof profile, briefly
 
 - **flat** = time/bytes spent in that function's own code. **cum**

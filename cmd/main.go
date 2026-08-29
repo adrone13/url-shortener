@@ -14,6 +14,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/adrone13/url-shortener/internal/cache/lru"
 	"github.com/adrone13/url-shortener/internal/config"
 	"github.com/adrone13/url-shortener/internal/handler"
 	"github.com/adrone13/url-shortener/internal/logging"
@@ -70,7 +71,7 @@ func main() {
 	defer pool.Close()
 
 	logPgPoolStatsOnce(pool, logger)
-	go logPgPoolStats(ctx, pool, logger)
+	// go logPgPoolStats(ctx, pool, logger)
 
 	go func() {
 		logger.Info("starting pprof server", slog.String("addr", ":6060"))
@@ -79,8 +80,14 @@ func main() {
 		}
 	}()
 
+	lruCache, err := lru.New(10)
+	if err != nil {
+		logger.Error("failed to create cache", "error", err)
+		os.Exit(1)
+	}
+
 	repo := postgres.New(pool)
-	svc := shortener.New(repo)
+	svc := shortener.New(repo, lruCache, logger)
 	h := handler.NewShortenerHandler(logger, svc)
 	routes := handler.Routes(h)
 
