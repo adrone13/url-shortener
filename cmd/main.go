@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/adrone13/url-shortener/internal/cache/lru"
+	"github.com/adrone13/url-shortener/internal/cache/redis"
+	"github.com/adrone13/url-shortener/internal/cache/tiered"
 	"github.com/adrone13/url-shortener/internal/config"
 	"github.com/adrone13/url-shortener/internal/handler"
 	"github.com/adrone13/url-shortener/internal/logging"
@@ -86,8 +88,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	redisCache, err := redis.Connect(ctx, cfg.RedisAddr, logger)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	cache := tiered.New(lruCache, redisCache)
+
 	repo := postgres.New(pool)
-	svc := shortener.New(repo, lruCache, logger)
+	svc := shortener.New(repo, cache, logger)
 	h := handler.NewShortenerHandler(logger, svc)
 	routes := handler.Routes(h)
 

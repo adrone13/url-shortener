@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
   postgres:
     image: postgres:17
 #    command: postgres -c synchronous_commit=off

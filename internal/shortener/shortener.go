@@ -8,11 +8,16 @@ import (
 	"math/rand/v2"
 	"net/url"
 	"strings"
+
+	"golang.org/x/sync/singleflight"
 )
+
+const maxShortenAttempts = 5
 
 var (
 	ErrInvalidURL = errors.New("invalid url")
 	ErrNotFound   = errors.New("short url not found")
+	ErrCodeExists = errors.New("short code already exists")
 )
 
 type Link struct {
@@ -35,14 +40,13 @@ type Shortener struct {
 	repo   Repository
 	cache  Cache
 	logger *slog.Logger
+	group  singleflight.Group
 }
 
 func New(repo Repository, cache Cache, logger *slog.Logger) *Shortener {
-	return &Shortener{repo, cache, logger}
+	return &Shortener{repo: repo, cache: cache, logger: logger}
 }
 
-// Shorten
-// TODO: add retry on duplicate
 func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, error) {
 	u, err := url.Parse(originalURL)
 	if err != nil {
@@ -55,18 +59,23 @@ func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, er
 		return "", fmt.Errorf("%w: missing host", ErrInvalidURL)
 	}
 
-	code := generateCode()
+	var code string
+	for attempt := 0; attempt < maxShortenAttempts; attempt++ {
+		code = generateCode()
 
-	link := Link{
-		OriginalURL: originalURL,
-		Code:        code,
+		err = s.repo.Save(ctx, Link{OriginalURL: originalURL, Code: code})
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, ErrCodeExists) {
+			return "", err
+		}
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to generate unique code after %d attempts: %w", maxShortenAttempts, err)
 	}
 
-	if err := s.repo.Save(ctx, link); err != nil {
-		return "", err
-	}
-
-	if err = s.cache.Set(ctx, code, originalURL); err != nil {
+	if err := s.cache.Set(ctx, code, originalURL); err != nil {
 		s.logger.Warn("failed to set cache", slog.Any("error", err))
 	}
 
@@ -82,16 +91,26 @@ func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
 		return originalURL, nil
 	}
 
-	originalURL, err = s.repo.Get(ctx, code)
+	// singleflight collapses concurrent Resolve calls for the same code into
+	// one repo.Get + cache.Set, so a burst of misses on a newly-hot link
+	// (cache stampede) hits the DB once instead of once per request.
+	v, err, _ := s.group.Do(code, func() (any, error) {
+		originalURL, err := s.repo.Get(ctx, code)
+		if err != nil {
+			return "", err
+		}
+
+		if err := s.cache.Set(ctx, code, originalURL); err != nil {
+			s.logger.Warn("failed to set cache", slog.Any("error", err))
+		}
+
+		return originalURL, nil
+	})
 	if err != nil {
 		return "", err
 	}
 
-	if err = s.cache.Set(ctx, code, originalURL); err != nil {
-		s.logger.Warn("failed to set cache", slog.Any("error", err))
-	}
-
-	return originalURL, nil
+	return v.(string), nil
 }
 
 func (s *Shortener) List(ctx context.Context) ([]Link, error) {

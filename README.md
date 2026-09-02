@@ -3,6 +3,8 @@ This project is a learning playground to study Go, best practices for writing we
 
 See [docs/performance.md](docs/performance.md) for benchmarking/profiling methodology, commands, and findings.
 
+See [docs/architecture-cheatsheet.md](docs/architecture-cheatsheet.md) for a reference on scaling/architecture terms (singleflight, LB/gateway/edge stack, horizontal scaling & statelessness).
+
 ## ToDo:
 * write a response to an HTML page via SSE or streaming
 * fully containerized environment

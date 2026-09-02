@@ -29,7 +29,7 @@ func (r *Repo) Save(ctx context.Context, link shortener.Link) error {
 	)
 	if err != nil {
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == uniqueViolation {
-			return fmt.Errorf("%w: code %q already exists", shortener.ErrInvalidURL, link.Code)
+			return fmt.Errorf("%w: code %q already exists", shortener.ErrCodeExists, link.Code)
 		}
 		return fmt.Errorf("save link: %w", err)
 	}
