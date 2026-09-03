@@ -10,9 +10,11 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger"
 
 	_ "github.com/adrone13/url-shortener/internal/docs"
+	"github.com/adrone13/url-shortener/internal/metrics"
 )
 
 const (
@@ -58,9 +60,11 @@ func New(port int, logger *slog.Logger, routes chi.Router) *Server {
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.Timeout(requestTimeout))
+	router.Use(metrics.HTTPMiddleware)
 
 	router.Mount("/api", routes)
 	router.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
+	router.Handle("/metrics", promhttp.Handler())
 
 	logEndpoints(logger, router)
 

@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"golang.org/x/sync/singleflight"
+
+	"github.com/adrone13/url-shortener/internal/metrics"
 )
 
 const maxShortenAttempts = 5
@@ -70,6 +72,7 @@ func (s *Shortener) Shorten(ctx context.Context, originalURL string) (string, er
 		if !errors.Is(err, ErrCodeExists) {
 			return "", err
 		}
+		metrics.ShortenCodeCollisions.Inc()
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to generate unique code after %d attempts: %w", maxShortenAttempts, err)
@@ -94,7 +97,7 @@ func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
 	// singleflight collapses concurrent Resolve calls for the same code into
 	// one repo.Get + cache.Set, so a burst of misses on a newly-hot link
 	// (cache stampede) hits the DB once instead of once per request.
-	v, err, _ := s.group.Do(code, func() (any, error) {
+	v, err, shared := s.group.Do(code, func() (any, error) {
 		originalURL, err := s.repo.Get(ctx, code)
 		if err != nil {
 			return "", err
@@ -108,6 +111,9 @@ func (s *Shortener) Resolve(ctx context.Context, code string) (string, error) {
 	})
 	if err != nil {
 		return "", err
+	}
+	if shared {
+		metrics.ResolveDedup.Inc()
 	}
 
 	return v.(string), nil

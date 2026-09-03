@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Connect(ctx context.Context, dsn string, logger *slog.Logger) (*pgxpool.Pool, error) {
+func Connect(ctx context.Context, dsn string, logger *slog.Logger, role string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, fmt.Errorf("create pool: %w", err)
@@ -19,7 +19,7 @@ func Connect(ctx context.Context, dsn string, logger *slog.Logger) (*pgxpool.Poo
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
 
-	logger.Info("connected to postgres")
+	logger.Info("connected to postgres", slog.String("role", role))
 
 	return pool, nil
 }

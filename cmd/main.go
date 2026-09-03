@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/adrone13/url-shortener/internal/cache/lru"
 	"github.com/adrone13/url-shortener/internal/cache/redis"
@@ -20,6 +21,7 @@ import (
 	"github.com/adrone13/url-shortener/internal/config"
 	"github.com/adrone13/url-shortener/internal/handler"
 	"github.com/adrone13/url-shortener/internal/logging"
+	"github.com/adrone13/url-shortener/internal/metrics"
 	"github.com/adrone13/url-shortener/internal/server"
 	"github.com/adrone13/url-shortener/internal/shortener"
 	"github.com/adrone13/url-shortener/internal/storage/postgres"
@@ -70,14 +72,14 @@ func main() {
 
 	logger.Info("starting app", slog.Int("cpus", runtime.NumCPU()))
 
-	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, logger)
+	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, logger, "primary")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	replicaPool, err := postgres.Connect(ctx, cfg.DatabaseReplicaURL, logger)
+	replicaPool, err := postgres.Connect(ctx, cfg.DatabaseReplicaURL, logger, "replica")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -87,6 +89,11 @@ func main() {
 	logPgPoolStatsOnce(pool, "primary", logger)
 	logPgPoolStatsOnce(replicaPool, "replica", logger)
 	// go logPgPoolStats(ctx, pool, "primary", logger)
+
+	prometheus.MustRegister(metrics.NewPgxPoolCollector(map[string]*pgxpool.Pool{
+		"primary": pool,
+		"replica": replicaPool,
+	}))
 
 	go func() {
 		logger.Info("starting pprof server", slog.String("addr", ":6060"))
