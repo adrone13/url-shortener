@@ -11,6 +11,7 @@ type Config struct {
 	LogLevel           string `env:"LOG_LEVEL,required,notEmpty"`
 	DatabaseURL        string `env:"DATABASE_URL,required,notEmpty"`
 	DatabaseReplicaURL string `env:"DATABASE_REPLICA_URL,required,notEmpty"`
+	PGPoolMaxConns     int32  `env:"PG_POOL_MAX_CONNS,required,notEmpty"`
 	RedisAddr          string `env:"REDIS_ADDR,required,notEmpty"`
 }
 

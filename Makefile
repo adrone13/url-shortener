@@ -4,7 +4,7 @@ CMD    := ./cmd
 include .env
 export
 
-.PHONY: build run test lint fmt vet tidy clean db-up db-down migrate-up migrate-down migrate-create bench-write bench-read bench-write-duration bench-read-duration swagger
+.PHONY: build run test lint fmt vet tidy clean up db-up db-down migrate-up migrate-down migrate-create bench-write bench-read bench-write-duration bench-read-duration swagger
 
 build:
 	go build -o bin/$(BINARY) $(CMD)
@@ -29,6 +29,12 @@ tidy:
 
 clean:
 	rm -rf bin
+
+up:
+	docker compose up -d --build
+
+down:
+	docker compose down
 
 db-up:
 	docker compose up -d postgres postgres-replica redis

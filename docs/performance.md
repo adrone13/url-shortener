@@ -54,9 +54,13 @@ classic queuing-on-a-saturated-resource shape, confirmed directly via the pool
 stat logs: `Σ acquire_duration ÷ concurrency` accounted for **65-80% of total
 wall-clock request time** at `c=100`.
 
-Raising `pool_max_conns` (set via `DATABASE_URL`, e.g.
-`...?pool_max_conns=100`) to match concurrency removed almost all of that
-queuing:
+Raising the pool size to match concurrency removed almost all of that
+queuing. (At the time, this was set via a `pool_max_conns` `DATABASE_URL`
+query param — later moved to its own `PG_POOL_MAX_CONNS` env var, set
+explicitly via `pgxpool.ParseConfig` + `MaxConns` in `postgres.Connect`,
+once that DSN param turned out to break `migrate` and any other tool
+sharing the same URL. Same knob, same numbers below — just no longer baked
+into the DSN.)
 
 | pool size | rps (c=100) | p50 | p99 |
 |---|---|---|---|

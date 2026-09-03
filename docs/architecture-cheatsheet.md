@@ -137,6 +137,44 @@ itself.
 See [performance.md, finding 7](performance.md) for how this project's
 actual replica is set up and why it made sense for this app's traffic shape.
 
+## Docker base image choice for a static Go binary: scratch vs. alpine vs. distroless
+
+For a `CGO_ENABLED=0` Go binary (no libc linked at runtime), ranked by what's
+actually inside each candidate final-stage image:
+
+- **`alpine`**: a full (tiny) Linux distro — shell (`busybox ash`), package
+  manager (`apk`), coreutils. None of that is needed by a statically-linked
+  Go binary that doesn't shell out to anything. Musl libc (vs. glibc) can
+  occasionally cause subtle DNS-resolution differences, though
+  `CGO_ENABLED=0` mostly sidesteps that since Go uses its own pure-Go
+  resolver rather than linking libc at all. Alpine's real selling point is
+  "I can `docker exec` in and poke around" — which is also its downside: if
+  the app process is ever compromised, that same shell and package manager
+  are exactly what an attacker uses to pivot.
+- **`scratch`**: truly empty, zero files, smallest possible. Missing two
+  things almost every real Go service eventually needs: a CA certificate
+  bundle (needed the moment the app makes *any* outbound TLS call) and an
+  `/etc/passwd` entry — with no passwd entry there's no non-root user to run
+  as, so the process ends up running as root (UID 0) unless you manually
+  copy one in yourself.
+- **`gcr.io/distroless/static-debian12`**: the same "nothing to exploit"
+  posture as `scratch` — no shell, no package manager, no coreutils — but
+  ships the CA cert bundle and a pre-built `nonroot` user (UID `65532`,
+  switchable via the `:nonroot` tag) already set up, without extra `COPY`
+  lines to solve what `scratch` leaves you to solve by hand.
+
+**The reasoning, generalized**: distroless gives you `scratch`'s security
+posture (no tools left behind for an attacker to pivot with, even given code
+execution) while pre-solving the two things `scratch` would otherwise make
+you handle manually, without alpine's debugging conveniences that a service
+with proper metrics/logs/profiling (rather than a shell) doesn't need
+anyway.
+
+This project's `Dockerfile` uses `gcr.io/distroless/static-debian12:nonroot`
+— confirmed the process actually runs as UID `65532`, not root
+(`docker inspect --format '{{.Config.User}}'` / `docker top`), with no
+functional change to the app.
+
 ## Horizontal scaling vs. vertical scaling
 
 - **Vertical scaling**: make one machine bigger (more CPU/RAM).

@@ -3,6 +3,11 @@ services:
     image: redis:7
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   postgres:
     image: bitnamilegacy/postgresql:17.6.0-debian-12-r4
@@ -18,6 +23,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/bitnami/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   postgres-replica:
     image: bitnamilegacy/postgresql:17.6.0-debian-12-r4
@@ -31,9 +41,36 @@ services:
     ports:
       - "5433:5432"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     volumes:
       - pgdata-replica:/bitnami/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  app:
+    build: .
+    environment:
+      ENV: local
+      HTTP_PORT: "8080"
+      LOG_LEVEL: debug
+      DATABASE_URL: postgresql://postgres:root@postgres:5432/db?sslmode=disable
+      DATABASE_REPLICA_URL: postgresql://postgres:root@postgres-replica:5432/db?sslmode=disable
+      PG_POOL_MAX_CONNS: "100"
+      REDIS_ADDR: redis:6379
+    ports:
+      - "8080:8080"
+      - "6060:6060"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-replica:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   pgdata:

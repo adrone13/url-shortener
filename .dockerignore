@@ -1,0 +1,10 @@
+.git
+.idea
+.env
+.env.example
+bin
+bench-runs
+pprof
+docs
+migrations
+*.md

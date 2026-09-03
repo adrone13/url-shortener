@@ -72,14 +72,14 @@ func main() {
 
 	logger.Info("starting app", slog.Int("cpus", runtime.NumCPU()))
 
-	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, logger, "primary")
+	pool, err := postgres.Connect(ctx, cfg.DatabaseURL, cfg.PGPoolMaxConns, logger, "primary")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	replicaPool, err := postgres.Connect(ctx, cfg.DatabaseReplicaURL, logger, "replica")
+	replicaPool, err := postgres.Connect(ctx, cfg.DatabaseReplicaURL, cfg.PGPoolMaxConns, logger, "replica")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
