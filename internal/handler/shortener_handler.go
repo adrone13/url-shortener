@@ -32,6 +32,18 @@ func NewShortenerHandler(logger *slog.Logger, svc *shortener.Shortener) *Shorten
 	return &ShortenerHandler{logger, svc}
 }
 
+// shorten creates a short code for a URL.
+//
+//	@Summary		Shorten a URL
+//	@Description	Creates a short code for the given URL.
+//	@Tags			links
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		shortenRequest	true	"URL to shorten"
+//	@Success		201		{object}	shortenResponse
+//	@Failure		400		{string}	string	"invalid request or URL"
+//	@Failure		500		{string}	string	"internal error"
+//	@Router			/shorten [post]
 func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 	var req shortenRequest
 
@@ -62,6 +74,16 @@ func (sh *ShortenerHandler) shorten(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// resolve redirects to the original URL for a short code.
+//
+//	@Summary		Resolve a short code
+//	@Description	Redirects to the original URL for the given code.
+//	@Tags			links
+//	@Param			code	path	string	true	"Short code"
+//	@Success		302
+//	@Failure		400	{string}	string	"invalid short url"
+//	@Failure		404	{string}	string	"short url not found"
+//	@Router			/{code} [get]
 func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	sh.logger.Debug("resolve request received")
 
@@ -87,6 +109,15 @@ func (sh *ShortenerHandler) resolve(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, originalURL, http.StatusFound)
 }
 
+// list returns all shortened links.
+//
+//	@Summary		List all links
+//	@Description	Returns every stored short code and its original URL.
+//	@Tags			links
+//	@Produce		json
+//	@Success		200	{object}	listResponse
+//	@Failure		500	{string}	string	"internal error"
+//	@Router			/links [get]
 func (sh *ShortenerHandler) list(w http.ResponseWriter, r *http.Request) {
 	sh.logger.Debug("list request received")
 
@@ -97,7 +128,7 @@ func (sh *ShortenerHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	if err = json.MarshalWrite(w, listResponse{Links: links}); err != nil {
 		sh.logger.Error("failed to encode response", slog.Any("error", err))
 	}

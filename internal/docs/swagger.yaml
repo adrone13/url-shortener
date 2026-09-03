@@ -1,0 +1,103 @@
+basePath: /api
+definitions:
+  handler.listResponse:
+    properties:
+      links:
+        items:
+          $ref: '#/definitions/shortener.Link'
+        type: array
+    type: object
+  handler.shortenRequest:
+    properties:
+      url:
+        type: string
+    type: object
+  handler.shortenResponse:
+    properties:
+      code:
+        type: string
+    type: object
+  shortener.Link:
+    properties:
+      code:
+        type: string
+      originalURL:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: Shortens URLs and resolves short codes back to their original URL.
+  title: URL Shortener API
+  version: "1.0"
+paths:
+  /{code}:
+    get:
+      description: Redirects to the original URL for the given code.
+      parameters:
+      - description: Short code
+        in: path
+        name: code
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+        "400":
+          description: invalid short url
+          schema:
+            type: string
+        "404":
+          description: short url not found
+          schema:
+            type: string
+      summary: Resolve a short code
+      tags:
+      - links
+  /links:
+    get:
+      description: Returns every stored short code and its original URL.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.listResponse'
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: List all links
+      tags:
+      - links
+  /shorten:
+    post:
+      consumes:
+      - application/json
+      description: Creates a short code for the given URL.
+      parameters:
+      - description: URL to shorten
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.shortenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.shortenResponse'
+        "400":
+          description: invalid request or URL
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Shorten a URL
+      tags:
+      - links
+swagger: "2.0"

@@ -4,7 +4,7 @@ CMD    := ./cmd
 include .env
 export
 
-.PHONY: build run test lint fmt vet tidy clean db-up db-down migrate-up migrate-down migrate-create bench-write bench-read bench-write-duration bench-read-duration
+.PHONY: build run test lint fmt vet tidy clean db-up db-down migrate-up migrate-down migrate-create bench-write bench-read bench-write-duration bench-read-duration swagger
 
 build:
 	go build -o bin/$(BINARY) $(CMD)
@@ -44,6 +44,9 @@ migrate-down:
 
 migrate-create:
 	migrate create -ext sql -dir migrations -seq $(name)
+
+swagger:
+	swag init -g cmd/main.go -o internal/docs
 
 n := 10000
 c := 50

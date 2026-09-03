@@ -10,6 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	_ "github.com/adrone13/url-shortener/internal/docs"
 )
 
 const (
@@ -57,6 +60,7 @@ func New(port int, logger *slog.Logger, routes chi.Router) *Server {
 	router.Use(middleware.Timeout(requestTimeout))
 
 	router.Mount("/api", routes)
+	router.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 
 	logEndpoints(logger, router)
 

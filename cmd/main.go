@@ -52,6 +52,10 @@ func logPgPoolStats(ctx context.Context, pool *pgxpool.Pool, role string, logger
 	}
 }
 
+// @title           URL Shortener API
+// @version         1.0
+// @description     Shortens URLs and resolves short codes back to their original URL.
+// @BasePath        /api
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
