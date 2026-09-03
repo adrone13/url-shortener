@@ -81,6 +81,62 @@ port directly. That's fine for local dev/benchmarking; adding any of this
 is the first step toward an actual deployed version, not something the
 benchmarking work in `performance.md` needed.
 
+## Postgres read replication: mechanism, tradeoffs, HA
+
+**The core idea**: every change to the database is first written to the WAL
+(write-ahead log) before being applied to the actual data files — originally
+built for crash recovery, so a restart after a crash can replay the log and
+reconstruct the exact prior state. Streaming replication reuses that same
+mechanism instead of inventing a separate one: a replica takes one full copy
+of the primary (`pg_basebackup`), then stays permanently in the same
+recovery-replay loop Postgres normally runs once after a crash — just fed
+continuously by a live WAL stream from the primary instead of a finite log
+file that eventually runs out.
+
+**Why a replica is read-only**: not a policy choice — a consequence of the
+mechanism. Its data files are being actively overwritten by the replay
+process in the background; a second writer modifying those same pages would
+corrupt that process. Only the replayer is allowed to write to a standby's
+data files.
+
+**Tradeoffs beyond replication lag**:
+- **Storage roughly doubles per replica** — each one holds a full physical
+  copy of the primary's data. Worse: if a replication *slot* is used and a
+  replica falls behind or disconnects, the primary retains WAL for it
+  indefinitely — that can grow unbounded and fill the *primary's* disk, a
+  real operational hazard, not just a replica-side cost.
+- **No write scaling.** All writes still funnel through the one primary; a
+  replica only ever helps the read side.
+- **Multi-replica reads can go "back in time."** With more than one replica,
+  each replays independently and can sit at a different point in the WAL
+  stream — a client bounced between replica A then replica B can see a
+  *newer* value followed by an *older* one on the very next request. Worse
+  than plain staleness, since it isn't even internally consistent across
+  requests.
+- **Version lock-step.** Physical streaming replication requires the same
+  major Postgres version on both sides — it can't bridge a version upgrade.
+  (Logical replication can, at the cost of not replicating DDL/sequences
+  automatically and needing per-table publications — a different tool for a
+  different job, not a faster version of the same one.)
+- **Recovery conflicts.** A long-running read query on a replica can get
+  canceled ("canceling statement due to conflict with recovery") if
+  incoming WAL removes data that query still needs — the replica has to
+  choose between delaying replication or canceling the query, and defaults
+  to canceling it.
+
+**Replication ≠ HA.** A plain streaming replica is a warm, up-to-date copy —
+nothing about it automatically promotes that replica if the primary dies.
+**HA (High Availability)** is the broader goal of keeping a service running
+through component failures, usually with orchestration on top of
+replication (Patroni, repmgr, pg_auto_failover, or a cloud provider's
+managed failover) to detect the failure, promote the standby, repoint
+clients, and fence the old primary so it can't come back and cause a
+split-brain. Replication is the mechanism HA is built on; it isn't HA by
+itself.
+
+See [performance.md, finding 7](performance.md) for how this project's
+actual replica is set up and why it made sense for this app's traffic shape.
+
 ## Horizontal scaling vs. vertical scaling
 
 - **Vertical scaling**: make one machine bigger (more CPU/RAM).

@@ -25,9 +25,10 @@ import (
 	"github.com/adrone13/url-shortener/internal/storage/postgres"
 )
 
-func logPgPoolStatsOnce(pool *pgxpool.Pool, logger *slog.Logger) {
+func logPgPoolStatsOnce(pool *pgxpool.Pool, role string, logger *slog.Logger) {
 	poolStats := pool.Stat()
 	logger.Info("PG pool stats",
+		slog.String("role", role),
 		slog.Any("max_cons", poolStats.MaxConns()),
 		slog.Any("idle_cons", poolStats.IdleConns()),
 		slog.Duration("acquire_duration", poolStats.AcquireDuration()),
@@ -36,14 +37,14 @@ func logPgPoolStatsOnce(pool *pgxpool.Pool, logger *slog.Logger) {
 	)
 }
 
-func logPgPoolStats(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) {
+func logPgPoolStats(ctx context.Context, pool *pgxpool.Pool, role string, logger *slog.Logger) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			logPgPoolStatsOnce(pool, logger)
+			logPgPoolStatsOnce(pool, role, logger)
 		case <-ctx.Done():
 			logger.Info("pg pool stats stopped")
 			return
@@ -72,8 +73,16 @@ func main() {
 	}
 	defer pool.Close()
 
-	logPgPoolStatsOnce(pool, logger)
-	// go logPgPoolStats(ctx, pool, logger)
+	replicaPool, err := postgres.Connect(ctx, cfg.DatabaseReplicaURL, logger)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer replicaPool.Close()
+
+	logPgPoolStatsOnce(pool, "primary", logger)
+	logPgPoolStatsOnce(replicaPool, "replica", logger)
+	// go logPgPoolStats(ctx, pool, "primary", logger)
 
 	go func() {
 		logger.Info("starting pprof server", slog.String("addr", ":6060"))
@@ -96,7 +105,7 @@ func main() {
 
 	cache := tiered.New(lruCache, redisCache)
 
-	repo := postgres.New(pool)
+	repo := postgres.New(pool, replicaPool)
 	svc := shortener.New(repo, cache, logger)
 	h := handler.NewShortenerHandler(logger, svc)
 	routes := handler.Routes(h)

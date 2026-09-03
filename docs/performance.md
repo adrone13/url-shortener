@@ -209,6 +209,39 @@ local L1 (justified once Redis's own round-trip is shown to matter, not by
 default). See the discussion this finding came out of for the reasoning
 behind that split.
 
+### 7. Postgres read replica: reasoning, mechanism, tradeoffs, HA
+
+Added a streaming physical replica (`docker-compose.yml`: `postgres` as
+`master`, `postgres-replica` as `slave`, both `bitnamilegacy/postgresql`)
+and split `postgres.Repo` to send writes to a `primary` pool and reads
+(`Get`, `List`) to a separate `replica` pool.
+
+**Why**: this app's own traffic shape backs the case directly — reads
+dominate writes (see finding 5 vs. the write findings above: reads sustain
+noticeably higher rps at the same concurrency, and any real deployment of a
+URL shortener is read-heavy by nature). A read replica offloads that
+dominant load off the primary without touching write capacity, which
+matches where this app's actual bottleneck sits. See
+[architecture-cheatsheet.md](architecture-cheatsheet.md) for the general
+mechanism (WAL, why a replica is read-only), the tradeoffs beyond lag, and
+what HA actually requires on top of replication — not repeated here.
+
+Confirmed locally: creating the `links` table on the primary (DDL, not just
+data) appeared on the replica automatically with no migration run against
+it — physical replication ships everything, schema included.
+
+**Why this app is largely insulated from the staleness caveat**: `Shorten`
+writes straight into both cache tiers (finding 6 / Redis addition) on
+creation, so a freshly-created code is served from cache long before any
+request would fall through to a (possibly lagging) replica — the classic
+read-your-own-write problem doesn't surface here in practice.
+
+**Practical note from setting this up**: `bitnami/postgresql` no longer
+publishes pinned version tags on Docker Hub's free tier (as of mid-2025,
+only a floating `latest`) — versioned tags now live under
+`bitnamilegacy/postgresql`, which is what `docker-compose.yml` actually
+uses, for the same reason every other dependency in this repo is pinned.
+
 ## Reading a pprof profile, briefly
 
 - **flat** = time/bytes spent in that function's own code. **cum**

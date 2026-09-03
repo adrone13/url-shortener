@@ -6,11 +6,12 @@ import (
 )
 
 type Config struct {
-	Env         string `env:"ENV,required,notEmpty"`
-	HttpPort    int    `env:"HTTP_PORT,required,notEmpty"`
-	LogLevel    string `env:"LOG_LEVEL,required,notEmpty"`
-	DatabaseURL string `env:"DATABASE_URL,required,notEmpty"`
-	RedisAddr   string `env:"REDIS_ADDR,required,notEmpty"`
+	Env                string `env:"ENV,required,notEmpty"`
+	HttpPort           int    `env:"HTTP_PORT,required,notEmpty"`
+	LogLevel           string `env:"LOG_LEVEL,required,notEmpty"`
+	DatabaseURL        string `env:"DATABASE_URL,required,notEmpty"`
+	DatabaseReplicaURL string `env:"DATABASE_REPLICA_URL,required,notEmpty"`
+	RedisAddr          string `env:"REDIS_ADDR,required,notEmpty"`
 }
 
 func New() (*Config, error) {

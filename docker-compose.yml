@@ -5,16 +5,36 @@ services:
       - "6379:6379"
 
   postgres:
-    image: postgres:17
+    image: bitnamilegacy/postgresql:17.6.0-debian-12-r4
 #    command: postgres -c synchronous_commit=off
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: root
-      POSTGRES_DB: db
+      POSTGRESQL_USERNAME: postgres
+      POSTGRESQL_PASSWORD: root
+      POSTGRESQL_DATABASE: db
+      POSTGRESQL_REPLICATION_MODE: master
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pw
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/bitnami/postgresql
+
+  postgres-replica:
+    image: bitnamilegacy/postgresql:17.6.0-debian-12-r4
+    environment:
+      POSTGRESQL_REPLICATION_MODE: slave
+      POSTGRESQL_REPLICATION_USER: replicator
+      POSTGRESQL_REPLICATION_PASSWORD: replicator_pw
+      POSTGRESQL_MASTER_HOST: postgres
+      POSTGRESQL_MASTER_PORT_NUMBER: "5432"
+      POSTGRESQL_PASSWORD: root
+    ports:
+      - "5433:5432"
+    depends_on:
+      - postgres
+    volumes:
+      - pgdata-replica:/bitnami/postgresql
 
 volumes:
   pgdata:
+  pgdata-replica:

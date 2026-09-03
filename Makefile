@@ -31,7 +31,7 @@ clean:
 	rm -rf bin
 
 db-up:
-	docker compose up -d postgres redis
+	docker compose up -d postgres postgres-replica redis
 
 db-down:
 	docker compose down
