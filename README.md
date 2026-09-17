@@ -1,18 +1,37 @@
 # url-shortener
-This project is a learning playground to study Go, best practices for writing web servers and performance optimizations.
 
-See [docs/performance.md](docs/performance.md) for benchmarking/profiling methodology, commands, and findings.
+A URL shortener written in Go, built as a hands-on study of HTTP service
+design and performance: connection pooling, caching layers,
+read replicas, request deduplication, and the profiling/benchmarking work
+behind each of those decisions. Built iteratively with AI pair-programming
+(Claude).
 
-See [docs/architecture-cheatsheet.md](docs/architecture-cheatsheet.md) for a reference on scaling/architecture terms (singleflight, LB/gateway/edge stack, horizontal scaling & statelessness).
+## Stack
 
-Swagger UI is served at `/swagger/index.html` when the app is running. Regenerate the spec after changing handler annotations with `make swagger` (requires `go install github.com/swaggo/swag/cmd/swag@latest`).
+Go (chi) · Postgres (primary + read replica) · Redis · in-process LRU ·
+Prometheus + Grafana · Swagger
 
-Prometheus metrics are served at `/metrics`: standard RED HTTP metrics (`http_requests_total`, `http_request_duration_seconds`) plus custom ones — `pg_pool_*` (primary/replica pool stats), `cache_lookups_total{tier}` (lru/redis/miss), `resolve_dedup_total` (singleflight dedup), `shorten_code_collisions_total`.
+## Quick start
 
-`make up` runs the whole stack (app included) in Docker — the app talks to `postgres`/`postgres-replica`/`redis` by service name. `make run` still runs the app on the host against the same compose-managed dependencies via `.env`'s `localhost` URLs, for faster local iteration. Either way, migrations still need to be applied once against the primary (`make migrate-up`).
+```
+make up          # full stack in Docker: app, Postgres primary+replica, Redis, Prometheus, Grafana
+make migrate-up   # apply schema (once, against the primary)
+```
 
-Prometheus is at `localhost:9090`, scraping the app's `/metrics` every 5s. Grafana is at `localhost:3000` (anonymous access enabled for local dev, no login needed) with a "URL Shortener" dashboard auto-provisioned on startup — HTTP RED metrics, cache tier hit rate, DB pool health per role, collision/dedup rates, and Go runtime stats.
+`make run` runs the app on the host instead, against the same
+compose-managed dependencies, for faster local iteration.
 
-## ToDo:
-* write a response to an HTML page via SSE or streaming
-* unit-tests
+- App: `localhost:8080` — `POST /api/shorten`, `GET /api/{code}`, `GET /api/links`
+- API docs: `localhost:8080/swagger/index.html`
+- Metrics: `localhost:8080/metrics`
+- Grafana: `localhost:3000` (dashboard auto-provisioned) · Prometheus: `localhost:9090`
+
+## Further reading
+
+- [docs/performance.md](docs/performance.md) — benchmarking and profiling methodology and findings (connection pooling, caching, replication, CPU/alloc profiles)
+- [docs/architecture-cheatsheet.md](docs/architecture-cheatsheet.md) — reference notes on the scaling concepts applied here (singleflight, LB/gateway/edge stack, replication, horizontal scaling)
+
+## ToDo
+
+- unit tests
+- SSE/streaming response support

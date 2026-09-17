@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
@@ -37,21 +36,6 @@ func logPgPoolStatsOnce(pool *pgxpool.Pool, role string, logger *slog.Logger) {
 		slog.Int64("acquire_count", poolStats.AcquireCount()),
 		slog.Int64("empty_acquire_count", poolStats.EmptyAcquireCount()),
 	)
-}
-
-func logPgPoolStats(ctx context.Context, pool *pgxpool.Pool, role string, logger *slog.Logger) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			logPgPoolStatsOnce(pool, role, logger)
-		case <-ctx.Done():
-			logger.Info("pg pool stats stopped")
-			return
-		}
-	}
 }
 
 // @title           URL Shortener API
@@ -88,7 +72,6 @@ func main() {
 
 	logPgPoolStatsOnce(pool, "primary", logger)
 	logPgPoolStatsOnce(replicaPool, "replica", logger)
-	// go logPgPoolStats(ctx, pool, "primary", logger)
 
 	prometheus.MustRegister(metrics.NewPgxPoolCollector(map[string]*pgxpool.Pool{
 		"primary": pool,
